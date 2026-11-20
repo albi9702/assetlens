@@ -114,7 +114,10 @@ No secrets are needed: the Generali endpoint is public. The workflows raise
 `ASSETLENS_MAX_RETRIES` to 5 and the request delay to 1 second to tolerate
 temporary network errors. Edit the `cron` value in the workflow file to change
 the time; cron is always UTC. Scheduled workflows only run from the default
-branch, so the files must be pushed to `main`.
+branch (currently `public`). Each workflow also has a `push` trigger limited to
+its own file: GitHub only shows workflows in the Actions tab after their first
+run, so that trigger registers them when the workflow file is pushed. Ordinary
+code pushes do not start a sync.
 
 To use a downloaded database locally, stop the API, replace `data/assetlens.db`
 with the artifact, and run `uv run assetlens db` to confirm the path. The local

@@ -6,6 +6,12 @@ name: Data - daily delta
 # Market data only: this job never writes or caches policy snapshots.
 
 on:
+  # The push trigger only registers the workflow on first push; the daily work
+  # is done by the schedule. Paths keep it from running on ordinary commits.
+  push:
+    branches: [public, main]
+    paths:
+      - .github/workflows/data-daily.yml
   schedule:
     - cron: "17 4 * * *" # 04:17 UTC every day
   workflow_dispatch:

@@ -53,7 +53,9 @@ UTC; `data-monthly.yml` rebuilds the full history at 05:23 UTC on the first of
 the month. Both are market-only: they never compute or store a policy snapshot,
 so their cache and artifacts cannot leak private figures. Both are also manually
 dispatchable and persist the database in the `assetlens-market-db-` Actions
-cache. See the "Scheduled ingestion" section of `README.md` for the cache
+cache. Their `push` trigger is limited to the workflow file itself and exists
+only to register them in the Actions tab on first push; normal commits do not
+start a sync. See the "Scheduled ingestion" section of `README.md` for the cache
 fallback, schedules and artifact names.
 
 ## Project conventions

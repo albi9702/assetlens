@@ -6,6 +6,12 @@ name: Data - monthly full load
 # Market data only: this job never writes or caches policy snapshots.
 
 on:
+  # The push trigger only registers the workflow on first push; the monthly work
+  # is done by the schedule. Paths keep it from running on ordinary commits.
+  push:
+    branches: [public, main]
+    paths:
+      - .github/workflows/data-monthly.yml
   schedule:
     - cron: "23 5 1 * *" # 05:23 UTC on the first day of the month
   workflow_dispatch:
