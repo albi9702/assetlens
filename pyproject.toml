@@ -1,0 +1,100 @@
+[project]
+name = "assetlens"
+version = "0.1.0"
+description = "Collect, store and analyse historical prices for funds, ETFs and stocks."
+readme = "README.md"
+requires-python = ">=3.14"
+license = "MIT"
+authors = [{ name = "assetlens contributors" }]
+keywords = ["finance", "funds", "etf", "stocks", "polars", "sqlite", "market-data"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "alembic>=1.14",
+    "fastapi>=0.115",
+    "httpx>=0.28",
+    "polars>=1.20",
+    "pydantic>=2.10",
+    "pydantic-settings>=2.6",
+    "pyyaml>=6.0",
+    "rich>=13.9",
+    "sqlalchemy>=2.0",
+    "tenacity>=9.0",
+    "typer>=0.15",
+    "uvicorn[standard]>=0.32",
+]
+
+[project.scripts]
+assetlens = "assetlens.cli:app"
+
+[project.urls]
+Repository = "https://github.com/your-user/assetlens"
+
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/assetlens"]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.14",
+    "pre-commit>=4.0",
+    "pytest>=8.3",
+    "pytest-cov>=6.0",
+    "respx>=0.22",
+    "ruff>=0.9",
+    "types-pyyaml>=6.0",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "RUF", "PL", "T20"]
+ignore = ["PLR0913"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["PLR2004", "S101"]
+"migrations/*" = ["E501"]
+"src/assetlens/cli.py" = ["PLR0917"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.13"
+plugins = ["pydantic.mypy"]
+check_untyped_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+exclude = ["migrations/"]
+
+[[tool.mypy.overrides]]
+module = ["yaml.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q --strict-markers"
+filterwarnings = [
+    "error::DeprecationWarning:assetlens.*",
+    "ignore:Using `httpx` with `starlette.testclient` is deprecated.*:starlette.exceptions.StarletteDeprecationWarning",
+]
+
+[tool.coverage.run]
+source = ["assetlens"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = ["pragma: no cover", "if TYPE_CHECKING:"]

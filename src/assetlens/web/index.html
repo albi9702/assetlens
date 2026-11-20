@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Polizza · assetlens</title>
+    <meta
+      name="description"
+      content="Andamento della polizza: premi, valore lordo, netto e TIR."
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./vendor/chart.umd.min.js"></script>
+    <script defer src="./dashboard.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Vai ai grafici</a>
+
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Polizza previdenziale</p>
+        <h1>Andamento della polizza</h1>
+        <p class="subtitle">
+          Valori storici salvati in <code>policy_snapshots</code>. Premi in uscita,
+          valore lordo e netto dopo l'imposta sostitutiva.
+        </p>
+      </div>
+
+      <div class="pickers">
+        <div class="snapshot-picker">
+          <label for="snapshot">Rilevazione</label>
+          <select id="snapshot" disabled>
+            <option>Caricamento…</option>
+          </select>
+        </div>
+
+        <div class="snapshot-picker">
+          <label for="start-date">Partenza dei grafici</label>
+          <select id="start-date" disabled>
+            <option>Caricamento…</option>
+          </select>
+        </div>
+
+        <div class="snapshot-picker">
+          <label for="market-range">Periodo fondi e GESAV</label>
+          <select id="market-range" disabled>
+            <option value="1y" selected>Ultimo anno</option>
+            <option value="6m">Ultimi 6 mesi</option>
+            <option value="3m">Ultimi 3 mesi</option>
+            <option value="ytd">Da inizio anno</option>
+            <option value="premiums">Mesi dei premi</option>
+            <option value="all">Tutto</option>
+          </select>
+        </div>
+      </div>
+    </header>
+
+    <main id="main">
+      <section id="notice" class="notice" hidden></section>
+
+      <section id="kpis" class="kpis" aria-label="Indicatori principali"></section>
+
+      <section class="grid-two">
+        <article class="card">
+          <header class="card-head">
+            <div>
+              <h2>Capitale investito per anno</h2>
+              <p class="card-note">
+                Quanto pesa ogni premio sul totale versato. La percentuale è la
+                quota del capitale investito.
+              </p>
+            </div>
+          </header>
+          <div class="chart-wrap">
+            <canvas
+              id="premiums-chart"
+              role="img"
+              aria-label="Barre verticali con l'importo di ogni premio e la sua percentuale sul capitale investito"
+            ></canvas>
+          </div>
+        </article>
+
+        <article class="card">
+          <header class="card-head">
+            <div>
+              <h2>Valore attribuito a ogni premio</h2>
+              <p class="card-note">
+                Il valore attuale diviso per premio, crescendo ogni versamento al
+                TIR della polizza. La somma coincide con il valore mostrato.
+              </p>
+            </div>
+            <div class="segmented" role="group" aria-label="Base di calcolo del valore per premio">
+              <button type="button" data-basis="gross" aria-pressed="true">Lordo</button>
+              <button type="button" data-basis="net" aria-pressed="false">Netto</button>
+            </div>
+          </header>
+          <div class="chart-wrap">
+            <canvas
+              id="tranches-chart"
+              role="img"
+              aria-label="Barre orizzontali con il valore attribuito a ogni premio e la sua percentuale sul valore totale"
+            ></canvas>
+          </div>
+        </article>
+      </section>
+
+      <section class="card">
+        <header class="card-head">
+          <div>
+            <h2>Andamento giornaliero</h2>
+            <p class="card-note">
+              Valore ricostruito giorno per giorno: NAV dei fondi e rendimento
+              GESAV applicati alla composizione della rilevazione scelta.
+            </p>
+          </div>
+          <div class="segmented" role="group" aria-label="Serie mostrate nel grafico">
+            <button type="button" data-view="total" aria-pressed="true">Totali</button>
+            <button type="button" data-view="parts" aria-pressed="false">Comparti</button>
+          </div>
+        </header>
+        <div class="chart-wrap tall">
+          <canvas
+            id="daily-chart"
+            role="img"
+            aria-label="Grafico a linee con capitale investito, valore lordo e netto giorno per giorno"
+          ></canvas>
+        </div>
+        <div id="daily-readout" class="daily-readout" aria-live="polite">
+          <span class="readout-hint"
+            >Passa il mouse sul grafico per leggere i valori esatti di ogni giorno.</span
+          >
+        </div>
+        <p id="daily-note" class="card-note" hidden></p>
+      </section>
+
+      <section class="card">
+        <header class="card-head">
+          <div>
+            <h2>Valore dei fondi</h2>
+            <p class="card-note">
+              Valore di quota di ogni comparto unit-linked: nessun importo in euro.
+              Il periodo si sceglie nell'intestazione della pagina.
+            </p>
+          </div>
+        </header>
+        <div class="chart-wrap tall">
+          <canvas
+            id="funds-chart"
+            role="img"
+            aria-label="Grafico a linee con il valore di quota di ogni fondo Generali"
+          ></canvas>
+        </div>
+        <p id="funds-note" class="card-note" hidden></p>
+      </section>
+
+      <section class="card">
+        <header class="card-head">
+          <div>
+            <h2>GESAV — rendimento annuo</h2>
+            <p class="card-note">
+              Rendimento annuo pubblicato della gestione separata, in percentuale.
+              Non è un controvalore in euro.
+            </p>
+          </div>
+        </header>
+        <div class="chart-wrap">
+          <canvas
+            id="gesav-chart"
+            role="img"
+            aria-label="Grafico a linee con il rendimento annuo del GESAV"
+          ></canvas>
+        </div>
+        <p id="gesav-note" class="card-note" hidden></p>
+      </section>
+
+      <section class="card">
+        <header class="card-head">
+          <div>
+            <h2>Composizione del valore</h2>
+            <p class="card-note">
+              GESAV è la gestione separata; gli altri comparti sono unit-linked.
+              La percentuale è la quota sul valore lordo.
+            </p>
+          </div>
+        </header>
+        <div class="chart-wrap">
+          <canvas
+            id="holdings-chart"
+            role="img"
+            aria-label="Barre orizzontali con il valore di ogni comparto e la sua percentuale sul valore lordo"
+          ></canvas>
+        </div>
+      </section>
+
+      <section class="card">
+        <header class="card-head">
+          <div>
+            <h2>Dati</h2>
+            <p class="card-note">
+              Gli stessi numeri dei grafici, in forma tabellare. Utile per
+              controlli e per la lettura da tastiera.
+            </p>
+          </div>
+        </header>
+
+        <div class="tables">
+          <div class="table-scroll">
+            <table id="tranches-table">
+              <caption>
+                Premi, valore attribuito e quote
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Premio</th>
+                  <th scope="col" class="num">Importo</th>
+                  <th scope="col" class="num">Quota versata</th>
+                  <th scope="col" class="num">Anni</th>
+                  <th scope="col" class="num">Valore</th>
+                  <th scope="col" class="num">Quota valore</th>
+                  <th scope="col" class="num">Guadagno</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+
+          <div class="table-scroll">
+            <table id="holdings-table">
+              <caption>
+                Comparti della polizza
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Comparto</th>
+                  <th scope="col" class="num">Quote</th>
+                  <th scope="col" class="num">NAV</th>
+                  <th scope="col" class="num">Valore</th>
+                  <th scope="col" class="num">Quota</th>
+                </tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="page-footer">
+      <p>
+        Fonte: <code>data/assetlens.db</code> · tabella
+        <code>policy_snapshots</code>. Importi in euro.
+      </p>
+    </footer>
+
+  </body>
+</html>

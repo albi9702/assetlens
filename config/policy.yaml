@@ -1,0 +1,48 @@
+# EXAMPLE DATA ONLY - do not put real policy figures in this file.
+#
+# This file is committed on purpose so a fresh clone can run the policy
+# commands. For your own policy, copy it to config/policy.local.yaml and point
+# ASSETLENS_POLICY_FILE at that file; config/policy.local.yaml is gitignored.
+#
+# Values below are round numbers: five yearly premiums of 1,000, a separate
+# account worth 3,000 and five funds worth 2,500 in total.
+
+as_of: 2024-01-01
+currency: EUR
+tax_rate: 0.20
+
+premiums:
+  - paid_on: 2020-01-01
+    amount: 1000.00
+  - paid_on: 2021-01-01
+    amount: 1000.00
+  - paid_on: 2022-01-01
+    amount: 1000.00
+  - paid_on: 2023-01-01
+    amount: 1000.00
+  - paid_on: 2024-01-01
+    amount: 1000.00
+
+holdings:
+  - name: GESAV
+    value: 3000.00
+  - name: Generali Salute e Benessere
+    quote: 100.00000
+    nav: 4.00
+    value: 400.00
+  - name: Generali Crescita Sostenibile
+    quote: 100.00000
+    nav: 4.50
+    value: 450.00
+  - name: Generali Consumo Responsabile
+    quote: 100.00000
+    nav: 5.00
+    value: 500.00
+  - name: Generali Pari Opportunità
+    quote: 100.00000
+    nav: 5.50
+    value: 550.00
+  - name: Generali Tutela del Clima
+    quote: 100.00000
+    nav: 6.00
+    value: 600.00

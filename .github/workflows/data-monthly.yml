@@ -1,0 +1,66 @@
+name: Data - monthly full load
+
+# Rebuild the whole history from an empty database once a month. This heals any
+# drift or missing day that an incremental sync could leave behind, and refreshes
+# the cache used by the daily delta job.
+# Market data only: this job never writes or caches policy snapshots.
+
+on:
+  schedule:
+    - cron: "23 5 1 * *" # 05:23 UTC on the first day of the month
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: assetlens-data-monthly
+  cancel-in-progress: false
+
+jobs:
+  full-load:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      ASSETLENS_LOG_LEVEL: INFO
+      ASSETLENS_MAX_RETRIES: "5"
+      ASSETLENS_REQUEST_DELAY_SECONDS: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: "3.14"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --all-groups
+
+      - name: Start from an empty database
+        run: |
+          mkdir -p data
+          rm -f data/assetlens.db
+
+      - name: Prepare schema
+        run: uv run assetlens init-db
+
+      - name: Full backfill
+        run: uv run assetlens sync --full
+
+      - name: Verify database
+        run: uv run assetlens instruments list
+
+      - name: Save database for the daily delta job
+        uses: actions/cache@v4
+        with:
+          path: data/assetlens.db
+          key: assetlens-market-db-${{ github.run_id }}
+
+      - name: Upload database snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: assetlens-market-db-full
+          path: data/assetlens.db
+          retention-days: 90
+          if-no-files-found: error

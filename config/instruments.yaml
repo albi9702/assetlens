@@ -1,0 +1,72 @@
+providers:
+  generali:
+    base_url: https://asset.generali.it
+    timeout_seconds: 20
+    request_delay_seconds: 0.5
+    max_retries: 4
+
+instruments:
+  - provider: generali
+    symbol: GI_GEN_TUTELA_CLIMA
+    name: Generali Tutela del Clima
+    asset_class: fund
+    currency: EUR
+    url: https://asset.generali.it/quotazioni/genera-sviluppo-sostenibile
+    metadata:
+      umbrella: Genera Sviluppo Sostenibile
+      compartment: Generali Tutela del Clima
+
+  - provider: generali
+    symbol: GI_GEN_CONSUMO_RESPONSABILE
+    name: Generali Consumo Responsabile
+    asset_class: fund
+    currency: EUR
+    url: https://asset.generali.it/quotazioni/genera-sviluppo-sostenibile
+    metadata:
+      umbrella: Genera Sviluppo Sostenibile
+      compartment: Generali Consumo Responsabile
+
+  - provider: generali
+    symbol: GI_GEN_PARI_OPPORTUNITA
+    name: Generali Pari Opportunità
+    asset_class: fund
+    currency: EUR
+    url: https://asset.generali.it/quotazioni/genera-sviluppo-sostenibile
+    metadata:
+      umbrella: Genera Sviluppo Sostenibile
+      compartment: Generali Pari Opportunità
+
+  - provider: generali
+    symbol: GI_GEN_SALUTE_BENESSERE
+    name: Generali Salute e Benessere
+    asset_class: fund
+    currency: EUR
+    url: https://asset.generali.it/quotazioni/genera-sviluppo-sostenibile
+    metadata:
+      umbrella: Genera Sviluppo Sostenibile
+      compartment: Generali Salute e Benessere
+
+  - provider: generali
+    symbol: GI_GEN_CRESCITA_SOSTENIBILE
+    name: Generali Crescita Sostenibile
+    asset_class: fund
+    currency: EUR
+    url: https://asset.generali.it/quotazioni/genera-sviluppo-sostenibile
+    metadata:
+      umbrella: Genera Sviluppo Sostenibile
+      compartment: Generali Crescita Sostenibile
+
+  - provider: generali
+    symbol: GESAV
+    name: GESAV - Gestione Separata
+    asset_class: separate_account
+    frequency: monthly
+    value_type: return_pct
+    currency: EUR
+    backfill_start: 1981-01-01
+    url: https://asset.generali.it/quotazioni/gestioni-separate
+    metadata:
+      type: gestione separata
+      notes: >-
+        Annual return rate published monthly. Values are percentages,
+        not a NAV; the last observation of each year is the year's return.
