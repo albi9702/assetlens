@@ -15,6 +15,7 @@ from typing import Any
 
 import polars as pl
 from sqlalchemy import Engine, func, select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import sessionmaker
 
@@ -315,9 +316,11 @@ class Repository:
             inserted = sum(1 for value in dates if value not in existing)
             updated = len(dates) - inserted
 
-            if self.engine.dialect.name == "sqlite":
+            dialect = self.engine.dialect.name
+            if dialect in {"sqlite", "postgresql"}:
+                insert = sqlite_insert if dialect == "sqlite" else postgresql_insert
                 for chunk in _chunks(records, 500):
-                    statement = sqlite_insert(Price).values(list(chunk))
+                    statement = insert(Price).values(list(chunk))
                     statement = statement.on_conflict_do_update(
                         index_elements=[Price.instrument_id, Price.price_date],
                         set_={
@@ -327,7 +330,7 @@ class Repository:
                         },
                     )
                     session.execute(statement)
-            else:  # pragma: no cover - SQLite is the only supported backend for now
+            else:  # pragma: no cover - only the supported backends are tested
                 for record in records:
                     session.merge(Price(**record))
 

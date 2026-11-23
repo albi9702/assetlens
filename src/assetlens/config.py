@@ -17,6 +17,8 @@ from typing import Any, Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+from sqlalchemy.engine import make_url
+from sqlalchemy.exc import ArgumentError
 
 from assetlens import __version__
 
@@ -180,6 +182,29 @@ class PolicyConfig(BaseModel):
         return self
 
 
+def normalize_database_url(url: str) -> str:
+    """Use the psycopg 3 driver for plain PostgreSQL URLs.
+
+    Neon and most providers hand out ``postgresql://`` URLs, which SQLAlchemy
+    would route to psycopg2. The project ships psycopg 3, so normalise the
+    scheme while leaving explicit driver URLs untouched.
+    """
+
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return f"postgresql+psycopg://{url.removeprefix(prefix)}"
+    return url
+
+
+def redact_database_url(url: str) -> str:
+    """Return a URL safe to print in logs and API responses."""
+
+    try:
+        return make_url(url).render_as_string(hide_password=True)
+    except ArgumentError:
+        return "<invalid database URL>"
+
+
 class Settings(BaseSettings):
     """Runtime settings, overridable through ``ASSETLENS_*`` variables."""
 
@@ -192,6 +217,9 @@ class Settings(BaseSettings):
 
     data_dir: Path = Field(default_factory=lambda: project_root() / "data")
     database_url: str | None = None
+    # Neon recommends a direct connection for migrations and a pooled one for
+    # application traffic. Defaults to ``database_url`` when not set.
+    migration_database_url: str | None = None
     instruments_file: Path = Field(
         default_factory=lambda: project_root() / "config" / "instruments.yaml"
     )
@@ -211,11 +239,31 @@ class Settings(BaseSettings):
 
     @property
     def resolved_database_url(self) -> str:
-        """SQLAlchemy URL, derived from ``data_dir`` when not set explicitly."""
+        """SQLAlchemy URL used by the application, normalised for its driver."""
 
         if self.database_url:
-            return self.database_url
+            return normalize_database_url(self.database_url)
         return f"sqlite:///{(self.data_dir / 'assetlens.db').as_posix()}"
+
+    @property
+    def resolved_migration_database_url(self) -> str:
+        """URL used by Alembic, preferring the direct connection when provided."""
+
+        if self.migration_database_url:
+            return normalize_database_url(self.migration_database_url)
+        return self.resolved_database_url
+
+    @property
+    def redacted_database_url(self) -> str:
+        """Application URL with the password removed, safe for logs and APIs."""
+
+        return redact_database_url(self.resolved_database_url)
+
+    @property
+    def redacted_migration_database_url(self) -> str:
+        """Migration URL with the password removed, safe for logs."""
+
+        return redact_database_url(self.resolved_migration_database_url)
 
     @property
     def database_path(self) -> Path | None:

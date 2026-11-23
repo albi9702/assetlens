@@ -63,7 +63,7 @@ def health(request: Request) -> HealthOut:
         raise HTTPException(status_code=503, detail=f"database unavailable: {exc}") from exc
     return HealthOut(
         status="ok",
-        database=settings.resolved_database_url,
+        database=settings.redacted_database_url,
         instruments=instruments,
         prices=prices,
     )

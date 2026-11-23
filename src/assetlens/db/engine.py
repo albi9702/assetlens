@@ -21,10 +21,11 @@ def _ensure_sqlite_directory(url: str) -> None:
 
 
 def create_db_engine(url: str, *, echo: bool = False) -> Engine:
-    """Create an SQLAlchemy engine with production-friendly SQLite pragmas.
+    """Create an SQLAlchemy engine for SQLite or PostgreSQL.
 
-    WAL mode allows concurrent readers (the API) while the CLI writes. Foreign
-    keys are disabled by default in SQLite and must be enabled per connection.
+    SQLite gets WAL mode, foreign keys and a busy timeout. PostgreSQL keeps a
+    pre-pinged pool with a short recycle time so Neon can scale to zero without
+    leaving stale connections behind.
     """
 
     _ensure_sqlite_directory(url)
@@ -34,6 +35,7 @@ def create_db_engine(url: str, *, echo: bool = False) -> Engine:
         url,
         echo=echo,
         pool_pre_ping=True,
+        pool_recycle=-1 if is_sqlite else 300,
         connect_args={"check_same_thread": False, "timeout": 10} if is_sqlite else {},
     )
 

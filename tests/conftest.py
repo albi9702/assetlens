@@ -21,6 +21,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 @pytest.fixture
 def settings(tmp_path: Path) -> Settings:
     return Settings(
+        _env_file=None,
         data_dir=tmp_path,
         database_url=f"sqlite:///{tmp_path / 'test.db'}",
         instruments_file=tmp_path / "instruments.yaml",
