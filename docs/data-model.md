@@ -186,9 +186,9 @@ TIR: -premium_i / (1 + r)^((date_i - date_0)/365.25) + value / (1 + r)^((as_of -
 
 - `price_date` is a date, not a timestamp. The Generali API returns UTC
   instants; the adapter converts them to Europe/Rome before extracting the day.
-- Audit columns are UTC. SQLite stores them as naive UTC and the
-  `UTCDateTime` decorator re-attaches `UTC` on read, so JSON responses include
-  an offset.
+- Audit columns are UTC. SQLite stores them as naive UTC and PostgreSQL as
+  `timestamptz`; the `UTCDateTime` decorator re-attaches `UTC` on read, so JSON
+  responses include an offset.
 - The incremental overlap uses calendar days, not trading days. Holidays are
   harmless: the provider simply returns no row for those dates.
 

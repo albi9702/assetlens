@@ -31,7 +31,7 @@ flowchart TD
     REG --> GEN[Generali adapter]
     REG --> FUT[Future adapters]
     SVC --> REPO[Repository]
-    REPO --> DB[(SQLite)]
+    REPO --> DB[(SQLite or PostgreSQL)]
     API --> REPO
     API --> ANA[Analytics - Polars]
     CLI --> ANA
@@ -61,7 +61,7 @@ sequenceDiagram
     participant S as IngestionService
     participant P as Provider
     participant R as Repository
-    participant DB as SQLite
+    participant DB as SQLite/PostgreSQL
 
     U->>CLI: assetlens sync [--full]
     CLI->>S: sync(symbols, full, start, end)
@@ -148,21 +148,31 @@ Polars is used for normalization, deduplication, returns, volatility and
 drawdowns. The repository returns Polars frames directly, so no conversion
 layer exists between storage and analytics.
 
-### SQLite with WAL
+### SQLite locally, PostgreSQL online
 
-SQLite is ideal for a single-user local project: zero administration and easy
-inspection. WAL mode allows the API to read while the CLI writes. Foreign keys
-and a 10-second busy timeout are enabled on every connection.
+SQLite is the zero-administration default for local use: easy inspection, WAL
+mode so the API can read while the CLI writes, foreign keys and a 10-second busy
+timeout on every connection. PostgreSQL is supported for the hosted deployment
+(see [Neon setup](neon.md)): Alembic creates the same schema and the repository
+picks the matching `ON CONFLICT DO UPDATE` dialect.
 
-The repository uses SQLAlchemy 2.0, so migrating to PostgreSQL later is mostly a
-URL change plus a new Alembic migration.
+The only connection-level differences are a 5-minute pool recycle for
+PostgreSQL and the URL itself. Use the pooled Neon URL for the application and
+the direct one for migrations.
+
+### Dialect-aware upserts
+
+`Repository.upsert_prices` uses `sqlite_insert` or `postgresql_insert` with
+`on_conflict_do_update`, so rerunning a sync is idempotent on both backends.
+Other dialects fall back to row-level merges.
 
 ### Timezone and date policy
 
 - A price belongs to the **calendar date in Europe/Rome**.
 - Provider timestamps are converted to that date in the adapter.
 - Audit timestamps are stored as UTC and returned timezone-aware (custom
-  `UTCDateTime` type decorator), so API payloads always carry an offset.
+  `UTCDateTime` type decorator): naive UTC in SQLite, `timestamptz` in
+  PostgreSQL. API payloads always carry an offset.
 - Dates are stored as ISO `YYYY-MM-DD`, which keeps the SQLite file readable.
 
 ### Read-only API
@@ -175,10 +185,12 @@ than opening the current sync endpoint.
 ## Concurrency and scheduling
 
 - One writer at a time is sufficient. SQLite serialises writes; WAL keeps reads
-  available.
-- For scheduled updates, run `assetlens sync` from cron or a systemd timer. The
-  incremental window makes a daily run cheap (five requests for five funds).
-- Do not run two full backfills concurrently against the same database.
+  available. PostgreSQL upserts are idempotent, but two full backfills should
+  still not run against the same database at once.
+- For scheduled updates, run `assetlens sync` from GitHub Actions (see
+  [Neon setup](neon.md)), cron or a systemd timer. The incremental window makes
+  a daily run cheap (five requests for five funds).
+- The web process only reads; writes happen in the CLI or the scheduled job.
 
 ## Observability
 
