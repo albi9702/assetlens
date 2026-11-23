@@ -1,8 +1,7 @@
 name: Data - daily delta
 
-# Fetch only what changed since the last stored observation. The database is
-# restored from the Actions cache; if the cache is gone, the job falls back to a
-# full backfill so a missing cache can never leave a partial history.
+# Fetch only what changed since the last stored observation. The database lives
+# in Neon, so there is no database cache or artifact to manage here.
 # Market data only: this job never writes or caches policy snapshots.
 
 on:
@@ -31,6 +30,8 @@ jobs:
       ASSETLENS_LOG_LEVEL: INFO
       ASSETLENS_MAX_RETRIES: "5"
       ASSETLENS_REQUEST_DELAY_SECONDS: "1"
+      ASSETLENS_DATABASE_URL: ${{ secrets.ASSETLENS_DATABASE_URL }}
+      ASSETLENS_MIGRATION_DATABASE_URL: ${{ secrets.ASSETLENS_MIGRATION_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,44 +44,22 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups
 
-      - name: Make data directory
-        run: mkdir -p data
-
-      - name: Restore last database
-        uses: actions/cache@v4
-        with:
-          path: data/assetlens.db
-          key: assetlens-market-db-${{ github.run_id }}
-          restore-keys: |
-            assetlens-market-db-
-
-      - name: Detect restored database
-        id: db-state
+      - name: Check database secrets
         run: |
-          if [ -f data/assetlens.db ]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+          test -n "$ASSETLENS_DATABASE_URL" || {
+            echo "::error::ASSETLENS_DATABASE_URL secret is missing"
+            exit 1
+          }
+          test -n "$ASSETLENS_MIGRATION_DATABASE_URL" || {
+            echo "::error::ASSETLENS_MIGRATION_DATABASE_URL secret is missing"
+            exit 1
+          }
 
       - name: Prepare schema
         run: uv run assetlens init-db
 
       - name: Incremental sync
-        if: steps.db-state.outputs.exists == 'true'
         run: uv run assetlens sync
-
-      - name: Full backfill (cache was empty)
-        if: steps.db-state.outputs.exists != 'true'
-        run: uv run assetlens sync --full
 
       - name: Verify database
         run: uv run assetlens instruments list
-
-      - name: Upload database snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: assetlens-market-db-daily
-          path: data/assetlens.db
-          retention-days: 7
-          if-no-files-found: error
