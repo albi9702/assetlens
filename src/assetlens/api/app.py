@@ -17,6 +17,8 @@ import polars as pl
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+from starlette.types import Scope
 
 from assetlens import __version__
 from assetlens.api.schemas import (
@@ -50,6 +52,21 @@ from assetlens.services.policy_history import (
 )
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+
+class DashboardStaticFiles(StaticFiles):
+    """Serve the dashboard with revalidation.
+
+    The dashboard is edited together with the backend during development, so a
+    stale JavaScript file would show a new card with no data. ``no-cache``
+    forces the browser to revalidate on every load instead of guessing.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
 
 router = APIRouter()
 
@@ -456,7 +473,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(router)
 
     if WEB_DIR.is_dir():
-        app.mount("/dashboard", StaticFiles(directory=WEB_DIR, html=True), name="dashboard")
+        app.mount(
+            "/dashboard",
+            DashboardStaticFiles(directory=WEB_DIR, html=True),
+            name="dashboard",
+        )
 
         @app.get("/", include_in_schema=False)
         def dashboard_redirect() -> RedirectResponse:

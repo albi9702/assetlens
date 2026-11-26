@@ -77,6 +77,7 @@ const state = {
   market: null,
   marketCache: new Map(),
   fundPerformance: null,
+  fundPerformanceError: null,
 };
 
 const charts = Object.create(null);
@@ -102,7 +103,12 @@ async function init() {
   const [series, analysis, fundPerformance] = await Promise.all([
     fetchJSON("/policy/snapshots"),
     fetchJSON("/policy/analysis"),
-    fetchJSON("/policy/fund-performance"),
+    // A missing endpoint must not blank the whole dashboard: the card shows
+    // its own message instead.
+    fetchJSON("/policy/fund-performance").catch((error) => {
+      state.fundPerformanceError = error;
+      return null;
+    }),
   ]);
 
   state.series = series;
@@ -853,7 +859,16 @@ function renderFundPerformanceChart() {
   note.hidden = true;
   note.textContent = "";
 
-  if (!report || !report.premiums.length || !funds.length) {
+  if (!report) {
+    note.hidden = false;
+    note.textContent =
+      state.fundPerformanceError?.status === 404
+        ? "Confronto non disponibile: riavvia `uv run assetlens api` e ricarica la pagina."
+        : "Impossibile caricare il confronto dei fondi.";
+    return;
+  }
+
+  if (!report.premiums.length || !funds.length) {
     note.hidden = false;
     note.textContent = "Nessun confronto disponibile: servono premi e quotazioni dei fondi.";
     return;

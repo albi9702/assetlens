@@ -333,11 +333,16 @@ def test_dashboard_is_served(settings: Settings) -> None:
 
     with TestClient(app) as client:
         page = client.get("/dashboard/")
+        script = client.get("/dashboard/dashboard.js")
         redirect = client.get("/", follow_redirects=False)
 
     assert page.status_code == 200
     assert page.headers["content-type"].startswith("text/html")
+    assert page.headers["cache-control"] == "no-cache"
     assert "Andamento della polizza" in page.text
+    assert "fund-performance-chart" in page.text
+    assert script.status_code == 200
+    assert script.headers["cache-control"] == "no-cache"
     assert redirect.status_code in (302, 307)
     assert redirect.headers["location"] == "/dashboard/"
 
