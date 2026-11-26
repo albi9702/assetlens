@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help install lint format typecheck test test-cov check init-db sync api db-shell clean
+.PHONY: help install lint format typecheck test test-cov check init-db db-sql sync api db-shell clean
 
 help: ## Show available targets
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}'
@@ -25,8 +25,11 @@ test-cov: ## Run the test suite with coverage
 
 check: lint typecheck test ## Run every quality gate
 
-init-db: ## Create or migrate the SQLite database
+init-db: ## Create or migrate the configured database
 	uv run assetlens init-db
+
+db-sql: ## Regenerate sql/assetlens_schema.sql from the Alembic migrations
+	uv run python scripts/generate_schema_sql.py > sql/assetlens_schema.sql
 
 sync: ## Incremental sync of every instrument in the watchlist
 	uv run assetlens sync

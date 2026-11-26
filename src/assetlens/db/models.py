@@ -38,14 +38,14 @@ def utcnow() -> datetime:
 
 
 class UTCDateTime(TypeDecorator[datetime]):
-    """Persist timezone-aware timestamps as naive UTC.
+    """Persist UTC timestamps across SQLite and PostgreSQL.
 
-    SQLite has no native timezone support: without this decorator values come
-    back naive and the API would serialise them without an offset. Reads are
-    re-attached to UTC so every timestamp is unambiguous.
+    SQLite has no native timezone support, so values are stored as naive UTC
+    and re-attached on read. PostgreSQL uses ``TIMESTAMPTZ`` and keeps the
+    offset natively. Either way every timestamp is unambiguous.
     """
 
-    impl = DateTime
+    impl = DateTime(timezone=True)
     cache_ok = True
 
     def process_bind_param(self, value: datetime | None, dialect: Dialect) -> datetime | None:

@@ -130,7 +130,9 @@ def _upgrade_database(settings: Settings) -> None:
 
     config = Config(str(ini_file))
     config.set_main_option("script_location", str(root / "migrations"))
-    config.set_main_option("sqlalchemy.url", settings.resolved_database_url.replace("%", "%%"))
+    config.set_main_option(
+        "sqlalchemy.url", settings.resolved_migration_database_url.replace("%", "%%")
+    )
     command.upgrade(config, "head")
 
 
@@ -174,8 +176,11 @@ def init_db(ctx: typer.Context) -> None:
     """Create or migrate the database schema."""
 
     state = _state(ctx)
-    _upgrade_database(state.settings)
-    console.print(f"[green]Database ready:[/green] {state.settings.resolved_database_url}")
+    settings = state.settings
+    _upgrade_database(settings)
+    console.print(f"[green]Database ready:[/green] {settings.redacted_database_url}")
+    if settings.resolved_migration_database_url != settings.resolved_database_url:
+        console.print(f"[dim]Migrations: {settings.redacted_migration_database_url}[/dim]")
 
 
 @app.command()
@@ -533,7 +538,7 @@ def policy_compute(
     state.repository.upsert_policy_snapshot(summary)
     _print_policy("Policy snapshot", summary)
     console.print(
-        f"[green]Stored in[/green] {state.settings.resolved_database_url} "
+        f"[green]Stored in[/green] {state.settings.redacted_database_url} "
         "[green]table[/green] policy_snapshots"
     )
 
@@ -688,7 +693,9 @@ def db_info(ctx: typer.Context) -> None:
 
     state = _state(ctx)
     settings = state.settings
-    console.print(f"URL:  {settings.resolved_database_url}")
+    console.print(f"URL:  {settings.redacted_database_url}")
+    if settings.resolved_migration_database_url != settings.resolved_database_url:
+        console.print(f"Migrations: {settings.redacted_migration_database_url}")
     if settings.database_path is not None:
         console.print(f"Path: {settings.database_path}")
         console.print(f"Exists: {settings.database_path.exists()}")

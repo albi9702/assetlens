@@ -165,3 +165,30 @@ class MarketHistoryOut(BaseModel):
     funds: list[FundSeriesOut]
     gesav: list[MarketPointOut]
     premium_dates: list[date]
+
+
+class FundPremiumComparisonOut(BaseModel):
+    """NAV at a premium date versus the latest NAV."""
+
+    paid_on: date
+    nav_at_premium: float
+    nav_date: date
+    latest_nav: float
+    latest_date: date
+    change_pct: float
+
+
+class FundPerformanceOut(BaseModel):
+    """One fund and its comparison for every premium date."""
+
+    symbol: str
+    name: str
+    comparisons: list[FundPremiumComparisonOut]
+
+
+class FundPerformanceReportOut(BaseModel):
+    """Fund comparisons for the whole policy, GESAV excluded."""
+
+    reference_date: date | None = None
+    premiums: list[PremiumOut]
+    funds: list[FundPerformanceOut]

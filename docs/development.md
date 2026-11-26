@@ -25,6 +25,10 @@ copy it to `config/policy.local.yaml` (gitignored) and set
 `ASSETLENS_POLICY_FILE=config/policy.local.yaml` in `.env`. Both the local file
 and `.env` stay out of commits; the CI and scheduled jobs never read them.
 
+SQLite remains the default. To develop against PostgreSQL or Neon, follow
+[Neon setup](neon.md) and set `ASSETLENS_DATABASE_URL` plus, for migrations,
+`ASSETLENS_MIGRATION_DATABASE_URL` in `.env`.
+
 ## Everyday commands
 
 | Task | Command |
@@ -51,10 +55,13 @@ The same commands are available through `make` (`make install`, `make test`,
 `.github/workflows/data-daily.yml` runs the incremental sync every day at 04:17
 UTC; `data-monthly.yml` rebuilds the full history at 05:23 UTC on the first of
 the month. Both are market-only: they never compute or store a policy snapshot,
-so their cache and artifacts cannot leak private figures. Both are also manually
-dispatchable and persist the database in the `assetlens-market-db-` Actions
-cache. See the "Scheduled ingestion" section of `README.md` for the cache
-fallback, schedules and artifact names.
+so they cannot leak private figures. Both are also manually dispatchable and
+write to Neon through the `ASSETLENS_DATABASE_URL` secret, using the direct
+`ASSETLENS_MIGRATION_DATABASE_URL` secret for `init-db`. There is no database
+cache or artifact. Their `push` trigger is limited to the workflow file itself
+and exists only to register them in the Actions tab on first push; normal
+commits do not start a sync. See the "Scheduled ingestion" section of
+`README.md` and [Neon setup](neon.md).
 
 ## Project conventions
 

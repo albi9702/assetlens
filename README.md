@@ -14,7 +14,7 @@ writing a small adapter, while storage, CLI, analytics and API stay unchanged.
 - **Incremental and full backfills** with idempotent upserts.
 - **Price and return series**: instruments declare their `value_type`, so the
   same storage serves funds, ETFs, stocks and separate accounts.
-- **SQLite** storage that can be inspected with `sqlite3` or DB Browser.
+- **SQLite locally and PostgreSQL/Neon online**, with dialect-aware upserts.
 - **Polars** for every analytical computation (no pandas).
 - **Provider abstraction** with throttling, retries and typed errors.
 - **CLI** built with Typer and Rich.
@@ -49,6 +49,9 @@ The database is created at `data/assetlens.db`:
 sqlite3 data/assetlens.db "select count(*) from prices;"
 sqlite3 data/assetlens.db "select * from instruments;"
 ```
+
+To use PostgreSQL or Neon instead, see [Neon setup](docs/neon.md). The local
+SQLite path remains the default, so the quickstart works offline.
 
 ## CLI reference
 
@@ -87,44 +90,59 @@ MVP does not expose unauthenticated write endpoints.
 
 ## Scheduled ingestion (GitHub Actions)
 
-Two workflows keep a GitHub-side copy of the database up to date. Both can also
+Two workflows keep the online PostgreSQL/Neon database up to date. Both can also
 be started manually from the Actions tab (`workflow_dispatch`).
 
 | Workflow | Schedule (UTC) | What it does |
 | --- | --- | --- |
 | `data-daily.yml` | every day at 04:17 | `assetlens sync` from the last stored date (delta, market only) |
-| `data-monthly.yml` | 1st of the month at 05:23 | `assetlens sync --full` from an empty database (market only) |
+| `data-monthly.yml` | 1st of the month at 05:23 | `assetlens sync --full` (idempotent full refresh, market only) |
 
-The database is **not** committed (see `.gitignore`). The monthly job rebuilds
-it from scratch and saves it in the Actions cache under the `assetlens-market-db-`
-prefix; the daily job restores the most recent cached copy and fetches only the
-new observations. If the cache is missing, the daily job falls back to a full
-backfill, so it can never build a partial history. Both jobs verify the coverage
-with `instruments list` and upload the resulting database as an artifact
-(`assetlens-market-db-daily`, kept 7 days; `assetlens-market-db-full`, kept 90
-days). The cache prefix was changed when the jobs became market-only, so an old
-cache containing a policy snapshot cannot be restored.
+The database is **not** committed and there is no database cache or artifact
+anymore: all data lives in Neon. The monthly job re-fetches the full market
+history and upserts it, which heals drift or missing days without deleting the
+database. The daily job only fetches the new observations.
+
+The workflows need two repository secrets:
+
+| Secret | Used by | Connection |
+| --- | --- | --- |
+| `ASSETLENS_DATABASE_URL` | `sync`, `instruments list` | Pooled Neon URL (`-pooler`) |
+| `ASSETLENS_MIGRATION_DATABASE_URL` | `init-db`/Alembic | Direct Neon URL (no `-pooler`) |
+
+Both URLs must include `sslmode=require`. The jobs fail early with a clear
+message if either secret is missing.
 
 **The scheduled jobs never write policy snapshots.** They only sync the public
-market series, so their cache and artifacts contain no private premium or
-holding data. Policy data is computed locally from your gitignored
+market series. Policy data is computed locally from your gitignored
 `config/policy.local.yaml`.
 
-No secrets are needed: the Generali endpoint is public. The workflows raise
-`ASSETLENS_MAX_RETRIES` to 5 and the request delay to 1 second to tolerate
-temporary network errors. Edit the `cron` value in the workflow file to change
-the time; cron is always UTC. Scheduled workflows only run from the default
-branch, so the files must be pushed to `main`.
-
-To use a downloaded database locally, stop the API, replace `data/assetlens.db`
-with the artifact, and run `uv run assetlens db` to confirm the path. The local
-database and its WAL files are never overwritten by GitHub: the Actions jobs
-work in their own checkout.
+The Generali endpoint is public, but the database credentials are not: keep them
+in GitHub Secrets only. The workflows raise `ASSETLENS_MAX_RETRIES` to 5 and the
+request delay to 1 second to tolerate temporary network errors. Edit the `cron`
+value in the workflow file to change the time; cron is always UTC. Scheduled
+workflows only run from the default branch (currently `public`). Each workflow
+also has a `push` trigger limited to its own file: GitHub only shows workflows in
+the Actions tab after their first run, so that trigger registers them when the
+workflow file is pushed. Ordinary code pushes do not start a sync.
 
 ## Configuration
 
 Settings are read from environment variables prefixed with `ASSETLENS_` or from
 a local `.env` file. See `.env.example` for every option.
+
+The database is chosen with `ASSETLENS_DATABASE_URL`. When it is unset, the
+project uses SQLite at `data/assetlens.db`. For PostgreSQL/Neon:
+
+```bash
+ASSETLENS_DATABASE_URL=postgresql+psycopg://user:pass@host-pooler/db?sslmode=require
+ASSETLENS_MIGRATION_DATABASE_URL=postgresql+psycopg://user:pass@host/db?sslmode=require
+```
+
+`ASSETLENS_MIGRATION_DATABASE_URL` is optional and defaults to the application
+URL. Set it to the direct Neon endpoint so `assetlens init-db` does not run
+Alembic through PgBouncer. Plain `postgresql://` URLs are normalized to the
+psycopg 3 driver automatically.
 
 The watchlist lives in `config/instruments.yaml`:
 
@@ -210,7 +228,7 @@ so net value equals gross value.
 
 ## Dashboard
 
-The dashboard reads the same SQLite data through the existing FastAPI app. It
+The dashboard reads the same database through the existing FastAPI app. It
 is a single static page with plain JavaScript and a vendored Chart.js: no Node,
 no build step and no external requests, so it works offline at home.
 
@@ -227,7 +245,14 @@ Available at:
 | `/policy/snapshots` | Stored snapshots, oldest first (time series). |
 | `/policy/analysis` | Latest snapshot plus the value attributed to each premium. |
 | `/policy/daily?start=YYYY-MM-DD` | Indicative day-by-day reconstruction from the stored prices. |
+| `/policy/fund-performance` | Each unit-linked fund's NAV at every premium date versus the latest NAV; GESAV excluded. |
 | `/market/history?range=...` | Raw fund NAVs and GESAV return; `1y`, `6m`, `3m`, `ytd`, `premiums` or `all`. |
+
+The "Fondi ai giorni dei premi" card compares every unit-linked fund at each
+premium date with its latest NAV: a grouped bar chart shows the percentage
+change and a colour-coded table shows the NAV then, the NAV now and the
+percentage. GESAV is excluded because it is a separate account, not a quoted
+fund.
 
 The charts follow a few simple rules: euro axes on bars start at zero, values
 are shown with compact axis ticks and exact tooltips, categories are labelled
@@ -283,6 +308,7 @@ src/assetlens/
 - [Architecture](docs/architecture.md)
 - [Data model](docs/data-model.md)
 - [Providers](docs/providers.md)
+- [Neon / PostgreSQL setup](docs/neon.md)
 - [Development](docs/development.md)
 
 ## Data source and responsible use

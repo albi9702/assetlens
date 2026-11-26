@@ -1,11 +1,16 @@
 name: Data - monthly full load
 
-# Rebuild the whole history from an empty database once a month. This heals any
-# drift or missing day that an incremental sync could leave behind, and refreshes
-# the cache used by the daily delta job.
+# Rebuild the whole market history once a month with idempotent upserts. This
+# heals drift or missing days without deleting the Neon database.
 # Market data only: this job never writes or caches policy snapshots.
 
 on:
+  # The push trigger only registers the workflow on first push; the monthly work
+  # is done by the schedule. Paths keep it from running on ordinary commits.
+  push:
+    branches: [public, main]
+    paths:
+      - .github/workflows/data-monthly.yml
   schedule:
     - cron: "23 5 1 * *" # 05:23 UTC on the first day of the month
   workflow_dispatch:
@@ -25,6 +30,8 @@ jobs:
       ASSETLENS_LOG_LEVEL: INFO
       ASSETLENS_MAX_RETRIES: "5"
       ASSETLENS_REQUEST_DELAY_SECONDS: "1"
+      ASSETLENS_DATABASE_URL: ${{ secrets.ASSETLENS_DATABASE_URL }}
+      ASSETLENS_MIGRATION_DATABASE_URL: ${{ secrets.ASSETLENS_MIGRATION_DATABASE_URL }}
     steps:
       - uses: actions/checkout@v4
 
@@ -37,10 +44,16 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups
 
-      - name: Start from an empty database
+      - name: Check database secrets
         run: |
-          mkdir -p data
-          rm -f data/assetlens.db
+          test -n "$ASSETLENS_DATABASE_URL" || {
+            echo "::error::ASSETLENS_DATABASE_URL secret is missing"
+            exit 1
+          }
+          test -n "$ASSETLENS_MIGRATION_DATABASE_URL" || {
+            echo "::error::ASSETLENS_MIGRATION_DATABASE_URL secret is missing"
+            exit 1
+          }
 
       - name: Prepare schema
         run: uv run assetlens init-db
@@ -50,17 +63,3 @@ jobs:
 
       - name: Verify database
         run: uv run assetlens instruments list
-
-      - name: Save database for the daily delta job
-        uses: actions/cache@v4
-        with:
-          path: data/assetlens.db
-          key: assetlens-market-db-${{ github.run_id }}
-
-      - name: Upload database snapshot
-        uses: actions/upload-artifact@v4
-        with:
-          name: assetlens-market-db-full
-          path: data/assetlens.db
-          retention-days: 90
-          if-no-files-found: error

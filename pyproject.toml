@@ -6,7 +6,7 @@ readme = "README.md"
 requires-python = ">=3.14"
 license = "MIT"
 authors = [{ name = "assetlens contributors" }]
-keywords = ["finance", "funds", "etf", "stocks", "polars", "sqlite", "market-data"]
+keywords = ["finance", "funds", "etf", "stocks", "polars", "sqlite", "postgresql", "market-data"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Financial and Insurance Industry",
@@ -19,6 +19,7 @@ dependencies = [
     "fastapi>=0.115",
     "httpx>=0.28",
     "polars>=1.20",
+    "psycopg[binary]>=3.2",
     "pydantic>=2.10",
     "pydantic-settings>=2.6",
     "pyyaml>=6.0",

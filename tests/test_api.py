@@ -179,6 +179,87 @@ def test_policy_daily_endpoint(settings: Settings, repository: Repository) -> No
     assert points[-1]["gross_value"] > points[0]["gross_value"]
 
 
+def test_fund_performance_endpoint(settings: Settings, repository: Repository) -> None:
+    fund_id = repository.upsert_instrument(
+        InstrumentConfig(
+            provider="generali",
+            symbol="GI_GEN_TUTELA_CLIMA",
+            name="Generali Tutela del Clima",
+            asset_class="fund",
+            currency="EUR",
+            value_type="price",
+            metadata={},
+        )
+    )
+    repository.upsert_prices(
+        fund_id,
+        pl.DataFrame(
+            {
+                "price_date": [
+                    date(2024, 4, 18),
+                    date(2024, 4, 22),
+                    date(2026, 11, 25),
+                ],
+                "value": [10.0, 11.0, 12.0],
+            },
+            schema={"price_date": pl.Date, "value": pl.Float64},
+        ),
+        source="test",
+    )
+    gesav_id = repository.upsert_instrument(
+        InstrumentConfig(
+            provider="generali",
+            symbol="GESAV",
+            name="GESAV - Gestione Separata",
+            asset_class="separate_account",
+            currency="EUR",
+            value_type="return_pct",
+            metadata={},
+        )
+    )
+    repository.upsert_prices(
+        gesav_id,
+        pl.DataFrame(
+            {
+                "price_date": [date(2024, 4, 1), date(2026, 11, 1)],
+                "value": [3.0, 3.2],
+            },
+            schema={"price_date": pl.Date, "value": pl.Float64},
+        ),
+        source="test",
+        value_type="return_pct",
+    )
+    repository.upsert_policy_snapshot(
+        compute_policy_summary(
+            [
+                Premium(date(2024, 4, 19), 1000.00),
+                Premium(date(2025, 4, 19), 1000.00),
+            ],
+            [
+                Holding("GESAV", 600.00),
+                Holding("Generali Tutela del Clima", 400.00, quote=40.0, nav=10.0),
+            ],
+            as_of=date(2026, 4, 19),
+        )
+    )
+    app = create_app(settings)
+
+    with TestClient(app) as client:
+        response = client.get("/policy/fund-performance")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["reference_date"] == "2026-11-25"
+    assert [fund["symbol"] for fund in payload["funds"]] == ["GI_GEN_TUTELA_CLIMA"]
+    comparisons = payload["funds"][0]["comparisons"]
+    assert [item["paid_on"] for item in comparisons] == ["2024-04-19", "2025-04-19"]
+    assert comparisons[0]["nav_at_premium"] == pytest.approx(10.0)
+    assert comparisons[0]["latest_nav"] == pytest.approx(12.0)
+    assert comparisons[0]["change_pct"] == pytest.approx(20.0)
+    assert comparisons[1]["nav_at_premium"] == pytest.approx(11.0)
+    assert comparisons[1]["change_pct"] == pytest.approx(9.0909, abs=1e-3)
+
+
 def test_market_history_ranges(settings: Settings, repository: Repository, watchlist) -> None:
     fund_id = repository.upsert_instrument(watchlist.instruments[0])
     repository.upsert_prices(
@@ -252,11 +333,16 @@ def test_dashboard_is_served(settings: Settings) -> None:
 
     with TestClient(app) as client:
         page = client.get("/dashboard/")
+        script = client.get("/dashboard/dashboard.js")
         redirect = client.get("/", follow_redirects=False)
 
     assert page.status_code == 200
     assert page.headers["content-type"].startswith("text/html")
+    assert page.headers["cache-control"] == "no-cache"
     assert "Andamento della polizza" in page.text
+    assert "fund-performance-chart" in page.text
+    assert script.status_code == 200
+    assert script.headers["cache-control"] == "no-cache"
     assert redirect.status_code in (302, 307)
     assert redirect.headers["location"] == "/dashboard/"
 

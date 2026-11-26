@@ -8,9 +8,9 @@
       name="description"
       content="Andamento della polizza: premi, valore lordo, netto e TIR."
     />
-    <link rel="stylesheet" href="./styles.css" />
+    <link rel="stylesheet" href="./styles.css?v=20261126" />
     <script defer src="./vendor/chart.umd.min.js"></script>
-    <script defer src="./dashboard.js"></script>
+    <script defer src="./dashboard.js?v=20261126"></script>
   </head>
   <body>
     <a class="skip-link" href="#main">Vai ai grafici</a>
@@ -155,6 +155,37 @@
       <section class="card">
         <header class="card-head">
           <div>
+            <h2>Fondi ai giorni dei premi</h2>
+            <p class="card-note">
+              Quanto è cambiato il NAV di ogni comparto unit-linked tra il giorno
+              del premio e l'ultima quotazione disponibile. Solo fondi interni:
+              GESAV è escluso.
+            </p>
+          </div>
+        </header>
+        <div class="chart-wrap">
+          <canvas
+            id="fund-performance-chart"
+            role="img"
+            aria-label="Barre raggruppate con la variazione percentuale di ogni fondo per data del premio"
+          ></canvas>
+        </div>
+        <p id="fund-performance-note" class="card-note" hidden></p>
+
+        <div class="table-scroll heatmap-wrap">
+          <table id="fund-performance-table" class="heatmap">
+            <caption>
+              NAV al giorno del premio, NAV attuale e variazione per fondo
+            </caption>
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="card">
+        <header class="card-head">
+          <div>
             <h2>GESAV — rendimento annuo</h2>
             <p class="card-note">
               Rendimento annuo pubblicato della gestione separata, in percentuale.
@@ -246,8 +277,8 @@
 
     <footer class="page-footer">
       <p>
-        Fonte: <code>data/assetlens.db</code> · tabella
-        <code>policy_snapshots</code>. Importi in euro.
+        Fonte: database assetlens · tabella <code>policy_snapshots</code>.
+        Importi in euro.
       </p>
     </footer>
 
