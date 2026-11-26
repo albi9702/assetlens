@@ -46,14 +46,32 @@ jobs:
 
       - name: Check database secrets
         run: |
-          test -n "$ASSETLENS_DATABASE_URL" || {
-            echo "::error::ASSETLENS_DATABASE_URL secret is missing"
-            exit 1
-          }
-          test -n "$ASSETLENS_MIGRATION_DATABASE_URL" || {
-            echo "::error::ASSETLENS_MIGRATION_DATABASE_URL secret is missing"
-            exit 1
-          }
+          uv run python - <<'PY'
+          import os
+          import sys
+
+          from sqlalchemy.engine import make_url
+
+          for name in ("ASSETLENS_DATABASE_URL", "ASSETLENS_MIGRATION_DATABASE_URL"):
+              value = os.environ.get(name)
+              if not value:
+                  print(f"::error::{name} secret is missing")
+                  sys.exit(1)
+
+              try:
+                  url = make_url(value)
+              except Exception:
+                  print(f"::error::{name} must be a valid PostgreSQL connection URL")
+                  sys.exit(1)
+
+              if (
+                  not url.drivername.startswith("postgresql")
+                  or not url.username
+                  or not url.password
+              ):
+                  print(f"::error::{name} must include a PostgreSQL username and password")
+                  sys.exit(1)
+          PY
 
       - name: Prepare schema
         run: uv run assetlens init-db
