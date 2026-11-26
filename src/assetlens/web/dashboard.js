@@ -56,6 +56,12 @@ const DATE = new Intl.DateTimeFormat("it-IT", {
   year: "numeric",
 });
 
+const DATE_SHORT = new Intl.DateTimeFormat("it-IT", {
+  day: "2-digit",
+  month: "short",
+  year: "2-digit",
+});
+
 const MONTH_YEAR = new Intl.DateTimeFormat("it-IT", {
   month: "short",
   year: "2-digit",
@@ -70,6 +76,7 @@ const state = {
   dailyCache: new Map(),
   market: null,
   marketCache: new Map(),
+  fundPerformance: null,
 };
 
 const charts = Object.create(null);
@@ -92,13 +99,15 @@ async function init() {
   document.getElementById("start-date").addEventListener("change", loadDaily);
   document.getElementById("market-range").addEventListener("change", loadMarket);
 
-  const [series, analysis] = await Promise.all([
+  const [series, analysis, fundPerformance] = await Promise.all([
     fetchJSON("/policy/snapshots"),
     fetchJSON("/policy/analysis"),
+    fetchJSON("/policy/fund-performance"),
   ]);
 
   state.series = series;
   state.analysis = analysis;
+  state.fundPerformance = fundPerformance;
 
   populateSnapshots(series, analysis.snapshot.as_of);
   populateStartDates(series, analysis.snapshot.as_of);
@@ -339,6 +348,8 @@ function renderAll() {
   renderPremiumsChart();
   renderTranchesChart();
   renderDailyChart();
+  renderFundPerformanceChart();
+  renderFundPerformanceTable();
   renderHoldingsChart();
   renderTranchesTable();
   renderHoldingsTable();
@@ -808,6 +819,201 @@ function renderFundsChart() {
   note.textContent = showPoints
     ? `${funds.length} fondi · ${funds[0].points.length} osservazioni solo nei mesi dei premi (${dates}). I valori sono quote NAV, non importi in euro.`
     : `${funds.length} fondi · ${funds[0].points.length} osservazioni per fondo. I valori sono quote NAV, non importi in euro.`;
+}
+
+function orderedFundPerformance() {
+  const report = state.fundPerformance;
+  if (!report) {
+    return [];
+  }
+  const holdings = state.analysis?.snapshot?.holdings || [];
+  const weights = new Map(holdings.map((holding) => [holding.name, holding.value]));
+  return [...report.funds].sort((a, b) => {
+    const difference = (weights.get(b.name) ?? 0) - (weights.get(a.name) ?? 0);
+    return difference || a.name.localeCompare(b.name, "it");
+  });
+}
+
+function fundComparisons(fund) {
+  return new Map(fund.comparisons.map((item) => [item.paid_on, item]));
+}
+
+function heatColor(changePct) {
+  const strength = 0.06 + Math.min(Math.abs(changePct) / 20, 1) * 0.28;
+  return changePct >= 0
+    ? `rgba(0, 122, 90, ${strength.toFixed(3)})`
+    : `rgba(176, 48, 48, ${strength.toFixed(3)})`;
+}
+
+function renderFundPerformanceChart() {
+  destroyChart("fundPerformance");
+  const note = document.getElementById("fund-performance-note");
+  const report = state.fundPerformance;
+  const funds = orderedFundPerformance();
+  note.hidden = true;
+  note.textContent = "";
+
+  if (!report || !report.premiums.length || !funds.length) {
+    note.hidden = false;
+    note.textContent = "Nessun confronto disponibile: servono premi e quotazioni dei fondi.";
+    return;
+  }
+
+  const paidDates = report.premiums.map((premium) => premium.paid_on);
+  const datasets = funds.map((fund, index) => {
+    const comparisons = fundComparisons(fund);
+    const color = PALETTE[index % PALETTE.length];
+    return {
+      label: shortFundName(fund.name),
+      data: paidDates.map((day) => {
+        const comparison = comparisons.get(day);
+        return comparison ? comparison.change_pct : null;
+      }),
+      backgroundColor: color,
+      borderColor: color,
+      borderWidth: 1,
+      borderRadius: 4,
+      maxBarThickness: 26,
+    };
+  });
+
+  charts.fundPerformance = new Chart(document.getElementById("fund-performance-chart"), {
+    type: "bar",
+    data: {
+      labels: paidDates.map((day) => DATE_SHORT.format(parseDate(day))),
+      datasets,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: { position: "top", labels: { usePointStyle: true, boxWidth: 8 } },
+        tooltip: {
+          callbacks: {
+            title: (items) => {
+              const premium = report.premiums[items[0].dataIndex];
+              return `Premio del ${DATE.format(parseDate(premium.paid_on))} · ${EUR2.format(
+                premium.amount,
+              )}`;
+            },
+            label: (item) => {
+              const fund = funds[item.datasetIndex];
+              const comparison = fundComparisons(fund).get(paidDates[item.dataIndex]);
+              if (!comparison) {
+                return `${item.dataset.label}: nessuna quotazione`;
+              }
+              return [
+                `${item.dataset.label}: ${formatPercent(comparison.change_pct)}`,
+                `NAV ${NAV.format(comparison.nav_at_premium)} (${DATE.format(
+                  parseDate(comparison.nav_date),
+                )}) → ${NAV.format(comparison.latest_nav)} (${DATE.format(
+                  parseDate(comparison.latest_date),
+                )})`,
+              ];
+            },
+          },
+        },
+      },
+      scales: {
+        x: { grid: { display: false } },
+        y: {
+          beginAtZero: true,
+          grace: "8%",
+          ticks: { callback: (value) => `${PCT.format(value)}%` },
+          grid: {
+            color: (context) =>
+              context.tick && context.tick.value === 0
+                ? "#94a3b8"
+                : "rgba(148, 163, 184, 0.25)",
+          },
+        },
+      },
+    },
+  });
+
+  const reference = report.reference_date
+    ? ` Ultima quotazione: ${DATE.format(parseDate(report.reference_date))}.`
+    : "";
+  note.hidden = false;
+  note.textContent = `Variazione del NAV dalla data del premio all'ultima quotazione di ogni fondo.${reference} Le barre sono movimenti di quota dei singoli comparti, non il valore della polizza.`;
+}
+
+function renderFundPerformanceTable() {
+  const table = document.getElementById("fund-performance-table");
+  const head = table.tHead;
+  const body = table.tBodies[0];
+  const report = state.fundPerformance;
+  const funds = orderedFundPerformance();
+  head.textContent = "";
+  body.textContent = "";
+
+  if (!report || !report.premiums.length || !funds.length) {
+    return;
+  }
+
+  const premiumAmounts = new Map(
+    report.premiums.map((premium) => [premium.paid_on, premium.amount]),
+  );
+  const headRow = document.createElement("tr");
+  const corner = document.createElement("th");
+  corner.scope = "col";
+  corner.textContent = "Comparto";
+  headRow.append(corner);
+  for (const premium of report.premiums) {
+    const column = document.createElement("th");
+    column.scope = "col";
+    column.className = "num";
+    column.textContent = DATE_SHORT.format(parseDate(premium.paid_on));
+    column.title = `Premio del ${DATE.format(parseDate(premium.paid_on))} · ${EUR2.format(
+      premium.amount,
+    )}`;
+    headRow.append(column);
+  }
+  head.append(headRow);
+
+  for (const fund of funds) {
+    const row = document.createElement("tr");
+    const name = document.createElement("th");
+    name.scope = "row";
+    name.textContent = shortFundName(fund.name);
+    row.append(name);
+
+    const comparisons = fundComparisons(fund);
+    for (const premium of report.premiums) {
+      const comparison = comparisons.get(premium.paid_on);
+      const cellNode = document.createElement("td");
+      cellNode.className = "heat num";
+      if (!comparison) {
+        cellNode.append(element("span", "heat-nav", "–"));
+      } else {
+        cellNode.style.backgroundColor = heatColor(comparison.change_pct);
+        cellNode.title = `Premio del ${DATE.format(
+          parseDate(comparison.paid_on),
+        )} (${EUR2.format(premiumAmounts.get(comparison.paid_on) ?? 0)}): NAV ${NAV.format(
+          comparison.nav_at_premium,
+        )} al ${DATE.format(
+          parseDate(comparison.nav_date),
+        )} → ${NAV.format(comparison.latest_nav)} al ${DATE.format(
+          parseDate(comparison.latest_date),
+        )}`;
+        cellNode.append(
+          element(
+            "span",
+            `heat-pct ${comparison.change_pct >= 0 ? "positive" : "negative"}`,
+            formatPercent(comparison.change_pct),
+          ),
+          element(
+            "span",
+            "heat-nav",
+            `${NAV.format(comparison.nav_at_premium)} → ${NAV.format(comparison.latest_nav)}`,
+          ),
+        );
+      }
+      row.append(cellNode);
+    }
+    body.append(row);
+  }
 }
 
 function renderGesavChart() {

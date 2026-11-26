@@ -332,6 +332,55 @@ main {
   overflow-x: auto;
 }
 
+.heatmap-wrap {
+  margin-top: 1rem;
+}
+
+.heatmap thead th {
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.heatmap th[scope="row"] {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--surface);
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text);
+}
+
+.heatmap td.heat {
+  min-width: 118px;
+  text-align: right;
+  border-left: 2px solid var(--surface);
+  border-bottom: 2px solid var(--surface);
+}
+
+.heat-pct {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.heat-pct.positive {
+  color: var(--positive);
+}
+
+.heat-pct.negative {
+  color: var(--negative);
+}
+
+.heat-nav {
+  display: block;
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
 table {
   width: 100%;
   border-collapse: collapse;
