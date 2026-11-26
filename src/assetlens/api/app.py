@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from assetlens import __version__
 from assetlens.api.schemas import (
     DailyPolicyPointOut,
+    FundPerformanceReportOut,
     FundSeriesOut,
     HealthOut,
     InstrumentDetailOut,
@@ -40,8 +41,13 @@ from assetlens.db.engine import create_db_engine
 from assetlens.db.repository import Repository
 from assetlens.errors import InstrumentNotFoundError, PolicySnapshotNotFoundError
 from assetlens.services.analytics import compute_rate_summary, compute_summary
+from assetlens.services.fund_performance import FundPrices, compare_fund_performance
 from assetlens.services.policy import Holding, Premium, compute_premium_tranches
-from assetlens.services.policy_history import normalize_name, reconstruct_daily_policy
+from assetlens.services.policy_history import (
+    normalize_name,
+    normalize_policy_name,
+    reconstruct_daily_policy,
+)
 
 WEB_DIR = Path(__file__).resolve().parent.parent / "web"
 
@@ -257,6 +263,65 @@ def get_policy_daily(
         annual_rate=gross_pct / 100.0,
     )
     return [DailyPolicyPointOut.model_validate(asdict(point)) for point in points]
+
+
+@router.get(
+    "/policy/fund-performance",
+    response_model=FundPerformanceReportOut,
+    tags=["policy"],
+)
+def get_fund_performance(
+    repository: Annotated[Repository, Depends(get_repository)],
+    as_of: Annotated[
+        date | None, Query(description="Snapshot whose premium schedule is used.")
+    ] = None,
+) -> FundPerformanceReportOut:
+    """Compare each unit-linked fund's NAV at the premium dates with today.
+
+    GESAV is excluded: it is a separate account with a yearly return, not a
+    quoted fund, so a NAV comparison would be meaningless.
+    """
+
+    snapshot = repository.get_policy_snapshot(as_of)
+    premiums = [
+        Premium(paid_on=date.fromisoformat(item["paid_on"]), amount=item["amount"])
+        for item in snapshot.premiums
+    ]
+    # Only unit-linked compartments actually held by the policy: a future
+    # market ETF in the watchlist must not appear in this comparison.
+    holdings = [
+        Holding(name=item["name"], value=item["value"], quote=item["quote"], nav=item["nav"])
+        for item in snapshot.holdings
+    ]
+    instruments = repository.list_instruments(active_only=False).to_dicts()
+    by_name = {normalize_policy_name(row["name"]): row for row in instruments}
+
+    funds: list[FundPrices] = []
+    for holding in holdings:
+        if holding.is_separate_account:
+            continue
+        instrument = by_name.get(normalize_policy_name(holding.name))
+        if instrument is None or instrument["value_type"] != "price":
+            continue
+        frame = repository.get_prices(instrument["symbol"], provider=instrument["provider"])
+        if frame.is_empty():
+            continue
+        funds.append(
+            FundPrices(
+                symbol=instrument["symbol"],
+                name=instrument["name"],
+                points=list(
+                    zip(
+                        frame["price_date"].to_list(),
+                        frame["value"].to_list(),
+                        strict=True,
+                    )
+                ),
+            )
+        )
+
+    report = compare_fund_performance(premiums, funds)
+    return FundPerformanceReportOut.model_validate(asdict(report))
 
 
 MarketRange = Literal["1y", "6m", "3m", "ytd", "premiums", "all"]

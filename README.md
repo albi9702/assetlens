@@ -245,7 +245,14 @@ Available at:
 | `/policy/snapshots` | Stored snapshots, oldest first (time series). |
 | `/policy/analysis` | Latest snapshot plus the value attributed to each premium. |
 | `/policy/daily?start=YYYY-MM-DD` | Indicative day-by-day reconstruction from the stored prices. |
+| `/policy/fund-performance` | Each unit-linked fund's NAV at every premium date versus the latest NAV; GESAV excluded. |
 | `/market/history?range=...` | Raw fund NAVs and GESAV return; `1y`, `6m`, `3m`, `ytd`, `premiums` or `all`. |
+
+The "Fondi ai giorni dei premi" card compares every unit-linked fund at each
+premium date with its latest NAV: a grouped bar chart shows the percentage
+change and a colour-coded table shows the NAV then, the NAV now and the
+percentage. GESAV is excluded because it is a separate account, not a quoted
+fund.
 
 The charts follow a few simple rules: euro axes on bars start at zero, values
 are shown with compact axis ticks and exact tooltips, categories are labelled
